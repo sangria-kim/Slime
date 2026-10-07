@@ -145,9 +145,22 @@ for (var stage = 0; stage < 3; stage++)
 }
 for (var click = 0; click < SlimeModel.RequiredClicks; click++) evolving.Click();
 evolving.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + SlimeModel.SpawnDuration + 0.1, screens);
-Check(evolving.Generation == 3 && evolving.Mood == SlimeMood.Red && evolving.AngerLevel == 1 &&
-      Math.Abs(evolving.SizeMultiplier - 0.729) < 1e-10 && Math.Abs(evolving.SpeedMultiplier - 1.728) < 1e-10,
-    "Further respawns retain the final red stage without shrinking indefinitely");
+Check(evolving.Generation == 0 && evolving.Mood == SlimeMood.Green && evolving.AngerLevel == 0 &&
+      evolving.SizeMultiplier == 1 && evolving.SpeedMultiplier == 1 && evolving.ClickCount == 0 &&
+      Math.Abs(evolving.MovementSpeed - initialSpeed) < 1e-10,
+    "Red respawns as happy green with original size, speed and reset clicks");
+for (var cycle = 0; cycle < 3; cycle++)
+{
+    for (var stage = 1; stage <= 4; stage++)
+    {
+        for (var click = 0; click < SlimeModel.RequiredClicks; click++) evolving.Click();
+        evolving.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + SlimeModel.SpawnDuration + 0.1, screens);
+        if (evolving.Generation != stage % 4 || evolving.ClickCount != 0)
+            throw new Exception("Repeated color cycle failed");
+    }
+}
+Check(evolving.Mood == SlimeMood.Green && evolving.SizeMultiplier == 1 && evolving.SpeedMultiplier == 1,
+    "Three more complete green/yellow/orange/red cycles return to the original green state");
 var fresh = new SlimeModel(screens, 19);
 Check(fresh.Generation == 0 && fresh.Mood == SlimeMood.Green, "Restarting begins again at the happy green stage");
 Console.WriteLine($"\nAll {passed} checks passed.");

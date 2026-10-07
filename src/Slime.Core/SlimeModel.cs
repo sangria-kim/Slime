@@ -148,7 +148,7 @@ public sealed class SlimeModel
                 case SlimeState.Hidden:
                     ClickCount = 0;
                     HitAge = 100;
-                    Generation = Math.Min(FinalGeneration, Generation + 1);
+                    Generation = (Generation + 1) % (FinalGeneration + 1);
                     Place(screens);
                     State = SlimeState.Spawning;
                     break;
