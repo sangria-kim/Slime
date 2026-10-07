@@ -20,6 +20,8 @@ public sealed class SlimeModel
     public const double RedTeleportInterval = 5;
     public const double RedBlinkDuration = 0.3;
     public const double RedHopHeight = 44;
+    public const double TeleportDepartureDuration = 0.35;
+    public const double TeleportArrivalDuration = 0.65;
 
     private readonly Random random;
     private readonly double baseSpeed;
@@ -60,6 +62,12 @@ public sealed class SlimeModel
     public double RedElapsed { get; private set; }
     public double BlinkRemaining { get; private set; }
     public int TeleportCount { get; private set; }
+    public double TeleportDepartureProgress => CanShowTeleport && RedElapsed >= RedTeleportInterval - TeleportDepartureDuration
+        ? (RedElapsed - (RedTeleportInterval - TeleportDepartureDuration)) / TeleportDepartureDuration : 0;
+    public double TeleportArrivalProgress => CanShowTeleport && TeleportCount > 0 && RedElapsed < TeleportArrivalDuration
+        ? RedElapsed / TeleportArrivalDuration : 1;
+    private bool CanShowTeleport => Mood == SlimeMood.Red && !IsHeld
+        && (State is SlimeState.Active or SlimeState.Spawning);
     public double BlinkOpacity => BlinkRemaining > RedBlinkDuration / 2 ? 0
         : 1 - BlinkRemaining / (RedBlinkDuration / 2);
     public double HopHeight => Mood == SlimeMood.Red && State == SlimeState.Active && !IsHeld

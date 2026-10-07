@@ -68,6 +68,9 @@ internal static class SlimePainter
                 (float)(88 * width + i * 4), 13 + i * 2);
         }
 
+        // Spell light stays visible even when the slime itself is transparent.
+        DrawTeleport(graphics, model);
+
         using var body = new GraphicsPath();
         body.StartFigure();
         body.AddBezier(-46, -9, -54, -36, -30, -58, -14, -77);
@@ -245,4 +248,49 @@ internal static class SlimePainter
     }
 
     private static double Smooth(double value) => value * value * (3 - 2 * value);
+
+    private static void DrawTeleport(Graphics graphics, SlimeModel model)
+    {
+        var departing = model.TeleportDepartureProgress > 0;
+        var arriving = model.TeleportArrivalProgress < 1;
+        if (!departing && !arriving) return;
+        var p = departing ? model.TeleportDepartureProgress : model.TeleportArrivalProgress;
+        var strength = departing ? Smooth(p) : 1 - Smooth(p);
+        var size = model.SizeMultiplier;
+        Color Glow(int r, int g, int b, double alpha) => Color.FromArgb(
+            (int)Math.Clamp(255 * strength * alpha, 0, 255), r, g, b);
+        var center = 98f;
+        var bottom = 187f;
+        var beamWidth = (float)((departing ? 12 + p * 30 : 42 - p * 22) * size);
+        var beamHeight = (float)(155 * size);
+        using (var glow = new LinearGradientBrush(new PointF(center - beamWidth, bottom),
+                   new PointF(center + beamWidth, bottom), Color.Transparent, Color.Transparent))
+        {
+            glow.InterpolationColors = new ColorBlend
+            {
+                Colors = [Glow(63, 116, 255, 0), Glow(70, 191, 255, 0.4),
+                    Glow(229, 255, 255, 0.85), Glow(70, 191, 255, 0.4), Glow(63, 116, 255, 0)],
+                Positions = [0, 0.25f, 0.5f, 0.75f, 1]
+            };
+            graphics.FillRectangle(glow, center - beamWidth, bottom - beamHeight, beamWidth * 2, beamHeight);
+        }
+        using var blue = new Pen(Glow(77, 156, 255, 0.7), 5);
+        using var white = new Pen(Glow(205, 255, 255, 0.95), 1.8f);
+        for (var ring = 0; ring < 3; ring++)
+        {
+            var radius = (float)((26 + ring * 6 + (departing ? p : 1 - p) * 15) * size);
+            var y = bottom - (float)((ring * 36 + p * 18) * size);
+            graphics.DrawEllipse(blue, center - radius, y - 5, radius * 2, 10);
+            graphics.DrawEllipse(white, center - radius, y - 5, radius * 2, 10);
+        }
+        using var star = new SolidBrush(Glow(227, 255, 255, 0.95));
+        for (var i = 0; i < 8; i++)
+        {
+            var x = center + (float)(Math.Sin(i * 2.4 + p * 4) * (22 + i % 3 * 12) * size);
+            var y = bottom - (float)((18 + i * 16 + p * 28) * size);
+            var ray = (float)((3 + i % 3) * size);
+            graphics.FillPolygon(star, [new PointF(x, y - ray * 2), new PointF(x + ray * 0.4f, y),
+                new PointF(x, y + ray * 2), new PointF(x - ray * 0.4f, y)]);
+        }
+    }
 }

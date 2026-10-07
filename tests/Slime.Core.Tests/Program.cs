@@ -182,24 +182,34 @@ for (var stage = 0; stage < 3; stage++)
 }
 Check(red.Mood == SlimeMood.Red && red.RedElapsed == 0 && red.TeleportCount == 0,
     "Red teleport clock starts at reappearance");
+Check(red.TeleportDepartureProgress == 0 && red.TeleportArrivalProgress == 1,
+    "First red spawn does not show a false teleport effect");
 red.Update(0.975, screens);
 Check(Math.Abs(red.HopHeight - 44) < 1e-10, "Red continuously hops to 44 pixels without a click");
 red.Click();
 red.Update(4.024, screens);
 Check(red.TeleportCount == 0, "Red does not teleport before five seconds");
+Check(red.TeleportDepartureProgress > 0.99 && red.TeleportArrivalProgress == 1,
+    "Departure spell builds before relocation");
 red.Update(0.002, screens);
 Check(red.TeleportCount == 1 && red.BlinkOpacity == 0 && red.Mood == SlimeMood.Red && red.ClickCount == 1,
     "Five-second teleport briefly disappears without changing color or click count");
+Check(red.TeleportDepartureProgress == 0 && red.TeleportArrivalProgress < 0.01,
+    "Arrival spell remains visible while the slime disappears");
 Check(!red.Click() && !red.BeginHold(), "Invisible red slime cannot be clicked or grabbed");
 var teleportX = red.X;
 var teleportY = red.Y;
 red.Update(0.3, screens);
 Check(red.BlinkRemaining == 0 && red.BlinkOpacity == 1, "Red reappears after the brief blink");
+Check(red.TeleportArrivalProgress > 0 && red.TeleportArrivalProgress < 1,
+    "Arrival light fades after the slime reappears");
 red.Update(4.7, screens);
 Check(red.TeleportCount == 2 && (red.X != teleportX || red.Y != teleportY),
     "Next five-second teleport moves to another location");
 red.Update(0.3, screens);
 red.BeginHold();
+Check(red.TeleportDepartureProgress == 0 && red.TeleportArrivalProgress == 1,
+    "Grabbing interrupts teleport visuals");
 var heldCount = red.TeleportCount;
 var heldElapsed = red.RedElapsed;
 red.Update(10, screens);
@@ -214,6 +224,8 @@ var meltTeleportCount = red.TeleportCount;
 red.Update(SlimeModel.MeltDuration, screens);
 Check(red.State == SlimeState.Hidden && red.TeleportCount == meltTeleportCount,
     "Thirty clicks still melt red normally and stop automatic teleporting");
+Check(red.TeleportDepartureProgress == 0 && red.TeleportArrivalProgress == 1,
+    "Melting and hidden slime do not display teleport light");
 red.Update(SlimeModel.RespawnDelay, screens);
 Check(red.Mood == SlimeMood.Green && red.BlinkRemaining == 0 && red.TeleportCount == 0 && red.HopHeight == 0,
     "Red-to-green respawn resets hopping and teleport state");
