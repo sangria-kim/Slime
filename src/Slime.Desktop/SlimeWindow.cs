@@ -57,7 +57,11 @@ internal sealed class SlimeWindow : Form
                 var position = Cursor.Position;
                 if (pointer.Press(position.X, position.Y)) Capture = true;
             }
-            else if (e.Button == MouseButtons.Right) menu.Show(Cursor.Position);
+            else if (e.Button == MouseButtons.Right)
+            {
+                model.OfferFood();
+                Render();
+            }
         };
         MouseMove += (_, _) =>
         {
