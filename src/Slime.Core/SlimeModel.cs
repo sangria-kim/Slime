@@ -43,6 +43,14 @@ public sealed class SlimeModel
     public double StateTime { get; private set; }
     public double HitAge { get; private set; } = 100;
     public bool IsHeld { get; private set; }
+    public bool IsDragging { get; private set; }
+    public double DragTime { get; private set; }
+    public ReactionPose Struggle => IsDragging
+        ? new(1 + Math.Sin(DragTime * 22) * 0.12,
+            1 - Math.Sin(DragTime * 22) * 0.10,
+            4 + Math.Abs(Math.Sin(DragTime * 17)) * 6,
+            Math.Sin(DragTime * 18) * 12)
+        : new(1, 1, 0, 0);
     public int Generation { get; private set; }
     public SlimeMood Mood => (SlimeMood)Generation;
     public double SizeMultiplier => Math.Pow(0.9, Generation);
@@ -109,12 +117,18 @@ public sealed class SlimeModel
         return true;
     }
 
-    public void EndHold() => IsHeld = false;
+    public void EndHold()
+    {
+        IsHeld = false;
+        IsDragging = false;
+        DragTime = 0;
+    }
 
     public void DragTo(double x, double y, IReadOnlyList<DesktopArea> screens)
     {
         if (!IsHeld || !double.IsFinite(x) || !double.IsFinite(y)) return;
         if (screens.Count == 0) throw new ArgumentException("At least one screen is required.", nameof(screens));
+        IsDragging = true;
         // Pick the nearest monitor using the body center, including monitors separated by gaps.
         var centerX = x + WindowWidth / 2.0;
         var centerY = y + 150;
@@ -133,6 +147,7 @@ public sealed class SlimeModel
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
         Time += seconds;
         HitAge += seconds;
+        if (IsDragging) DragTime += seconds;
         // A disconnected monitor must never strand the pet outside the visible desktop.
         if (!screens.Contains(area)) Place(screens);
         var remaining = seconds;

@@ -31,13 +31,16 @@ internal static class SlimePainter
             opacity = 1 - Smooth(Math.Clamp((model.Progress - 0.68) / 0.32, 0, 1));
         }
         var reaction = model.Reaction;
+        var struggle = model.Struggle;
         var reactionStrength = model.State == SlimeState.Melting
             ? 1 - Smooth(Math.Clamp(model.StateTime / 0.35, 0, 1)) : 1;
         width *= 1 + (reaction.Width - 1) * reactionStrength;
         height *= 1 + (reaction.Height - 1) * reactionStrength;
+        width *= struggle.Width;
+        height *= struggle.Height;
         width *= model.SizeMultiplier;
         height *= model.SizeMultiplier;
-        var lift = reaction.Lift * reactionStrength * model.SizeMultiplier + model.HopHeight;
+        var lift = (reaction.Lift * reactionStrength + struggle.Lift) * model.SizeMultiplier + model.HopHeight;
         if (model.HopHeight > 0)
         {
             var stretch = model.HopHeight / SlimeModel.RedHopHeight;
@@ -75,14 +78,14 @@ internal static class SlimePainter
         body.CloseFigure();
 
         // MapleStory's long curled feeler ends in a small green bead.
-        var sway = (float)(Math.Sin(time * 3.2) * 3 + reaction.Tilt * reactionStrength);
+        var sway = (float)(Math.Sin(time * 3.2) * 3 + reaction.Tilt * reactionStrength + struggle.Tilt * 0.6);
         using var antenna = new GraphicsPath();
         antenna.AddBezier(-8, -85, -23 + sway, -110, -40 + sway, -95, -38, -65);
         antenna.AddBezier(-38, -65, -39, -43, -38 + sway, -22, -49 + sway, -17);
 
         using var transform = new Matrix();
         transform.Translate(98, 181 - (float)lift);
-        transform.Rotate((float)(reaction.Tilt * reactionStrength));
+        transform.Rotate((float)(reaction.Tilt * reactionStrength + struggle.Tilt));
         transform.Scale((float)width, (float)height);
         var hitShape = (GraphicsPath)body.Clone();
         hitShape.FillMode = FillMode.Winding;
@@ -129,7 +132,7 @@ internal static class SlimePainter
         var blink = time % 4.6 > 4.43;
         using var face = new SolidBrush(Tint(22, 33, 11));
         using var facePen = new Pen(Tint(22, 33, 11), 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-        if (model.HitAge < 0.44)
+        if (model.IsDragging || model.HitAge < 0.44)
         {
             graphics.DrawLines(facePen, [new PointF(-17 + look, -44), new PointF(-10 + look, -38), new PointF(-17 + look, -32)]);
             graphics.DrawLines(facePen, [new PointF(29 + look, -48), new PointF(22 + look, -42), new PointF(29 + look, -36)]);
@@ -149,7 +152,7 @@ internal static class SlimePainter
             graphics.DrawLine(glint, 24.5f + look, -46, 24.5f + look, -38);
             graphics.DrawLine(glint, 21 + look, -42, 28 + look, -42);
         }
-        if (model.HitAge < 0.44)
+        if (model.IsDragging || model.HitAge < 0.44)
         {
             graphics.FillEllipse(face, 3 + look, -33, 10, 12);
             using var tongue = new SolidBrush(Tint(250, 156, 170));
@@ -169,7 +172,7 @@ internal static class SlimePainter
             graphics.DrawArc(facePen, 2 + look, -36, 6, 7, 0, 160);
             graphics.DrawArc(facePen, 8 + look, -37, 6, 7, 20, 160);
         }
-        if (anger > 0 && model.HitAge >= 0.44)
+        if (anger > 0 && model.HitAge >= 0.44 && !model.IsDragging)
         {
             using var brows = new Pen(Tint(70, 26, 20, 0.45 + anger * 0.55), 1.5f + (float)anger * 1.5f)
                 { StartCap = LineCap.Round, EndCap = LineCap.Round };
@@ -182,6 +185,14 @@ internal static class SlimePainter
                 graphics.DrawLines(fury, [new PointF(20, -70), new PointF(25, -67), new PointF(28, -72)]);
                 graphics.DrawLines(fury, [new PointF(30, -66), new PointF(26, -63), new PointF(29, -59)]);
             }
+        }
+        if (model.IsDragging)
+        {
+            using var motion = new Pen(Tint(239, 255, 212, 0.65), 2)
+                { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            var flutter = (float)(Math.Sin(model.DragTime * 22) * 3);
+            graphics.DrawArc(motion, -67, -46 + flutter, 13, 24, 130, 100);
+            graphics.DrawArc(motion, 56, -48 - flutter, 13, 24, -50, 100);
         }
         graphics.Restore(saved);
 

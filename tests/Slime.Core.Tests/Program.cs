@@ -77,6 +77,8 @@ dragged.Update(0.1, screens);
 Check(dragged.X == originX && dragged.Y == originY, "Holding the mouse pauses crawling");
 pointer.Move(originX + 82, originY + 152, screens);
 Check(!pointer.IsDragging, "Small mouse jitter remains a click");
+Check(!dragged.IsDragging && dragged.Struggle == new ReactionPose(1, 1, 0, 0),
+    "Holding and small mouse jitter do not start the struggle animation");
 Check(pointer.Release(originX + 82, originY + 152, screens) && dragged.ClickCount == 1,
     "Release without dragging counts one click");
 dragged.Update(0.1, screens);
@@ -88,10 +90,17 @@ Check(dragged.Reaction == new ReactionPose(1, 1, 0, 0), "Reaction settles back t
 pointer.Press(dragged.X + 80, dragged.Y + 150);
 pointer.Move(500, 450, screens);
 Check(pointer.IsDragging && dragged.X == 420 && dragged.Y == 300, "Dragging preserves the grab offset");
+dragged.Update(0.1, screens);
+var firstStruggle = dragged.Struggle;
+dragged.Update(0.1, screens);
+Check(dragged.IsDragging && firstStruggle != dragged.Struggle && dragged.X == 420 && dragged.Y == 300,
+    "Struggling continues while held without drifting away from the drag position");
 pointer.Move(501, 451, screens);
 Check(dragged.X == 421 && dragged.Y == 301, "Repeated drag motion follows the pointer without drift");
 Check(!pointer.Release(501, 451, screens) && dragged.ClickCount == 1 && !dragged.IsHeld,
     "Dragging never increments the melt click count");
+Check(!dragged.IsDragging && dragged.DragTime == 0 && dragged.Struggle == new ReactionPose(1, 1, 0, 0),
+    "Releasing a drag returns immediately to the normal pose");
 var multi = new[] { screens[0], new DesktopArea(-1280, -200, 1280, 900) };
 pointer.Press(dragged.X + 80, dragged.Y + 150);
 pointer.Move(-500, 300, multi);
@@ -100,6 +109,8 @@ pointer.Move(-3000, -3000, multi);
 Check(dragged.X == -1280 && dragged.Y == -200, "Dragging clamps at the target monitor edge");
 pointer.Cancel();
 Check(!pointer.IsPressed && !dragged.IsHeld && dragged.ClickCount == 1, "Losing mouse capture cancels without clicking");
+Check(!dragged.IsDragging && dragged.Struggle == new ReactionPose(1, 1, 0, 0),
+    "Losing mouse capture also stops struggling");
 dragged.Update(0.1, multi);
 Check(dragged.X != -1280 || dragged.Y != -200, "Crawling resumes after the grab ends");
 for (var i = 0; i < SlimeModel.RequiredClicks - 1; i++) dragged.Click();
