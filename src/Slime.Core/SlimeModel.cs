@@ -2,6 +2,8 @@ namespace Slime.Core;
 
 public enum SlimeState { Spawning, Active, Melting, Hidden }
 public enum SlimeMood { Green, Yellow, Orange, Red }
+public enum FoodKind { Apple, Cheese, Meat, Cake, Doughnut }
+public readonly record struct FoodPlacement(FoodKind Kind, double X, double Y);
 
 public readonly record struct DesktopArea(double Left, double Top, double Width, double Height);
 public readonly record struct ReactionPose(double Width, double Height, double Lift, double Tilt);
@@ -22,6 +24,7 @@ public sealed class SlimeModel
     public const double RedHopHeight = 44;
     public const double TeleportDepartureDuration = 0.35;
     public const double TeleportArrivalDuration = 0.65;
+    public const double EatingDuration = 1.2;
 
     private readonly Random random;
     private readonly double baseSpeed;
@@ -61,7 +64,14 @@ public sealed class SlimeModel
     public double MovementSpeed => Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
     public double PersonalityTime { get; private set; }
     public bool IsCrying => State == SlimeState.Melting;
-    private bool CanMoveFreely => State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration;
+    public FoodPlacement? Food { get; private set; }
+    public bool IsEating { get; private set; }
+    public double EatingTime { get; private set; }
+    public int FeedCount { get; private set; }
+    public int TotalMeals { get; private set; }
+    public double HappyRemaining { get; private set; }
+    public bool CanOfferFood => State == SlimeState.Active && !IsHeld && Food is null && !IsEating && BlinkRemaining == 0;
+    private bool CanMoveFreely => State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration && Food is null && !IsEating;
     public double CrawlMultiplier => !CanMoveFreely ? 0 : Mood switch
     {
         SlimeMood.Green => PersonalityTime % 6 is >= 4.8 and < 5.8 ? 0 : 1,
@@ -115,11 +125,11 @@ public sealed class SlimeModel
         ? (RedElapsed - (RedTeleportInterval - TeleportDepartureDuration)) / TeleportDepartureDuration : 0;
     public double TeleportArrivalProgress => CanShowTeleport && TeleportCount > 0 && RedElapsed < TeleportArrivalDuration
         ? RedElapsed / TeleportArrivalDuration : 1;
-    private bool CanShowTeleport => Mood == SlimeMood.Red && !IsHeld
+    private bool CanShowTeleport => Mood == SlimeMood.Red && !IsHeld && Food is null && !IsEating
         && (State is SlimeState.Active or SlimeState.Spawning);
     public double BlinkOpacity => BlinkRemaining > RedBlinkDuration / 2 ? 0
         : 1 - BlinkRemaining / (RedBlinkDuration / 2);
-    public double HopHeight => Mood == SlimeMood.Red && State == SlimeState.Active && !IsHeld
+    public double HopHeight => Mood == SlimeMood.Red && State == SlimeState.Active && !IsHeld && Food is null && !IsEating
         ? Math.Abs(Math.Sin(RedElapsed * Math.PI / 0.65)) * RedHopHeight : 0;
     public ReactionPose Reaction
     {
@@ -163,6 +173,7 @@ public sealed class SlimeModel
         {
             State = SlimeState.Melting;
             StateTime = 0;
+            CancelFood();
         }
         return true;
     }
@@ -186,6 +197,7 @@ public sealed class SlimeModel
         if (!IsHeld || !double.IsFinite(x) || !double.IsFinite(y)) return;
         if (screens.Count == 0) throw new ArgumentException("At least one screen is required.", nameof(screens));
         IsDragging = true;
+        CancelFood();
         // Pick the nearest monitor using the body center, including monitors separated by gaps.
         var centerX = x + WindowWidth / 2.0;
         var centerY = y + 150;
@@ -204,9 +216,10 @@ public sealed class SlimeModel
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
         Time += seconds;
         HitAge += seconds;
+        HappyRemaining = Math.Max(0, HappyRemaining - seconds);
         if (IsDragging) DragTime += seconds;
         // A disconnected monitor must never strand the pet outside the visible desktop.
-        if (!screens.Contains(area)) Place(screens);
+        if (!screens.Contains(area)) { CancelFood(); Place(screens); }
         var remaining = seconds;
         while (remaining > 0)
         {
@@ -218,9 +231,11 @@ public sealed class SlimeModel
                 _ => double.PositiveInfinity
             };
             var step = Math.Min(remaining, duration - StateTime);
-            if ((State is SlimeState.Spawning or SlimeState.Active) && Mood == SlimeMood.Red && !IsHeld)
+            if ((State is SlimeState.Spawning or SlimeState.Active) && Mood == SlimeMood.Red && !IsHeld && Food is null && !IsEating)
                 UpdateRedTiming(step, screens);
-            if (CanMoveFreely)
+            if (State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration && (Food is not null || IsEating))
+                UpdateFeeding(step);
+            else if (CanMoveFreely)
             {
                 PersonalityTime += step;
                 Move(Math.Min(step, 0.1) * CrawlMultiplier);
@@ -235,6 +250,9 @@ public sealed class SlimeModel
                 case SlimeState.Melting: State = SlimeState.Hidden; break;
                 case SlimeState.Hidden:
                     ClickCount = 0;
+                    FeedCount = 0;
+                    HappyRemaining = 0;
+                    CancelFood();
                     HitAge = 100;
                     Generation = (Generation + 1) % (FinalGeneration + 1);
                     RedElapsed = 0;
@@ -245,6 +263,71 @@ public sealed class SlimeModel
                     State = SlimeState.Spawning;
                     break;
             }
+        }
+    }
+
+    public bool OfferFood()
+    {
+        if (!CanOfferFood) return false;
+        var angle = random.NextDouble() * Math.PI * 2;
+        var x = Math.Clamp(X + 98 + Math.Cos(angle) * 140, area.Left + 30,
+            area.Left + Math.Max(30, area.Width - 30));
+        var y = Math.Clamp(Y + 165 + Math.Sin(angle) * 90, area.Top + 30,
+            area.Top + Math.Max(30, area.Height - 30));
+        Food = new((FoodKind)random.Next(5), x, y);
+        return true;
+    }
+
+    private void CancelFood()
+    {
+        Food = null;
+        IsEating = false;
+        EatingTime = 0;
+    }
+
+    private void UpdateFeeding(double seconds)
+    {
+        if (!IsEating && Food is FoodPlacement food)
+        {
+            var targetX = Math.Clamp(food.X - 98, area.Left, area.Left + Math.Max(0, area.Width - WindowWidth));
+            var targetY = Math.Clamp(food.Y - 165, area.Top, area.Top + Math.Max(0, area.Height - WindowHeight));
+            var dx = targetX - X;
+            var dy = targetY - Y;
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+            var speed = baseSpeed * SpeedMultiplier * 2;
+            var travelTime = distance / speed;
+            if (distance > 0)
+            {
+                var travel = Math.Min(distance, speed * seconds);
+                X += dx / distance * travel;
+                Y += dy / distance * travel;
+                velocityX = dx / distance * baseSpeed * SpeedMultiplier;
+                velocityY = dy / distance * baseSpeed * SpeedMultiplier;
+            }
+            if (seconds < travelTime) return;
+            seconds -= travelTime;
+            Food = null;
+            IsEating = true;
+            EatingTime = 0;
+        }
+        if (!IsEating) return;
+        EatingTime += seconds;
+        if (EatingTime < EatingDuration) return;
+        IsEating = false;
+        EatingTime = 0;
+        TotalMeals++;
+        FeedCount++;
+        HappyRemaining = 1.5;
+        if (FeedCount == 3)
+        {
+            FeedCount = 0;
+            Generation = Math.Max(0, Generation - 1);
+            RedElapsed = 0;
+            BlinkRemaining = 0;
+            TeleportCount = 0;
+            PersonalityTime = 0;
+            HappyRemaining = 2.5;
+            ChooseDirection();
         }
     }
 

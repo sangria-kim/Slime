@@ -13,6 +13,7 @@ internal sealed class SlimeWindow : Form
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 33 };
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly ContextMenuStrip menu = new();
+    private readonly FoodWindow foodWindow = new();
     private readonly NotifyIcon tray;
     private readonly Icon petIcon;
     private readonly Bitmap frame = new(SlimeModel.WindowWidth, SlimeModel.WindowHeight, PixelFormat.Format32bppPArgb);
@@ -34,7 +35,18 @@ internal sealed class SlimeWindow : Form
         ClientSize = new Size(SlimeModel.WindowWidth, SlimeModel.WindowHeight);
         StartPosition = FormStartPosition.Manual;
         Location = new Point((int)model.X, (int)model.Y);
+        var feed = menu.Items.Add("먹이 주기 · 랜덤", null, (_, _) => { model.OfferFood(); Render(); });
+        var progress = menu.Items.Add("화 풀기: 0 / 3");
+        progress.Enabled = false;
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("슬라임 종료", null, (_, _) => Close());
+        menu.Opening += (_, _) =>
+        {
+            feed.Enabled = model.CanOfferFood;
+            feed.Text = model.Food is FoodPlacement snack ? $"{FoodSprites.Name(snack.Kind)} 먹으러 가는 중"
+                : model.IsEating ? "오물오물 먹는 중" : "먹이 주기 · 랜덤";
+            progress.Text = $"화 풀기: {model.FeedCount} / 3";
+        };
         petIcon = CreatePetIcon();
         Icon = petIcon;
         tray = new NotifyIcon { Icon = petIcon, Text = "슬라임 · 30번 클릭하면 녹아요", ContextMenuStrip = menu, Visible = true };
@@ -121,6 +133,7 @@ internal sealed class SlimeWindow : Form
         lastFrame = now;
         if (model.State == SlimeState.Hidden)
         {
+            foodWindow.Render(null, model.Time);
             if (Visible) Hide();
             timer.Interval = 100;
             return;
@@ -132,6 +145,7 @@ internal sealed class SlimeWindow : Form
 
     private void Render()
     {
+        foodWindow.Render(model.Food, model.Time);
         using var graphics = Graphics.FromImage(frame);
         graphics.Clear(Color.Transparent);
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -186,6 +200,7 @@ internal sealed class SlimeWindow : Form
             tray.Visible = false;
             tray.Dispose();
             menu.Dispose();
+            foodWindow.Dispose();
             hitShape?.Dispose();
             frame.Dispose();
             petIcon.Dispose();

@@ -41,6 +41,12 @@ internal static class SlimePainter
         height *= struggle.Height;
         width *= personality.Width;
         height *= personality.Height;
+        if (model.IsEating)
+        {
+            var chew = Math.Sin(model.EatingTime * 24);
+            width *= 1.08 + chew * 0.04;
+            height *= 1 - chew * 0.035;
+        }
         width *= model.SizeMultiplier;
         height *= model.SizeMultiplier;
         var lift = (reaction.Lift * reactionStrength + struggle.Lift + personality.Lift) * model.SizeMultiplier + model.HopHeight;
@@ -161,6 +167,11 @@ internal static class SlimePainter
             graphics.DrawLines(facePen, [new PointF(-17 + look, -44), new PointF(-10 + look, -38), new PointF(-17 + look, -32)]);
             graphics.DrawLines(facePen, [new PointF(29 + look, -48), new PointF(22 + look, -42), new PointF(29 + look, -36)]);
         }
+        else if (model.IsEating || model.HappyRemaining > 0)
+        {
+            graphics.DrawArc(facePen, -19 + look, -42, 14, 10, 190, 160);
+            graphics.DrawArc(facePen, 17 + look, -46, 14, 10, 190, 160);
+        }
         else if (blink)
         {
             graphics.DrawLine(facePen, -17 + look, -38, -8 + look, -38);
@@ -191,7 +202,12 @@ internal static class SlimePainter
             using var tongue = new SolidBrush(Tint(250, 156, 170));
             graphics.FillEllipse(tongue, 5 + look, -26, 6, 4);
         }
-        else if (anger > 0)
+        else if (model.IsEating)
+        {
+            var chew = (float)(Math.Sin(model.EatingTime * 24) * 2);
+            graphics.FillEllipse(face, 4 + look, -28, 8 + chew, 6);
+        }
+        else if (anger > 0 && model.HappyRemaining == 0)
         {
             graphics.DrawArc(facePen, 2 + look, -28, 12, 3 + (float)anger * 7, 180, 180);
             if (model.Mood == SlimeMood.Red)
@@ -205,7 +221,7 @@ internal static class SlimePainter
             graphics.DrawArc(facePen, 2 + look, -36, 6, 7, 0, 160);
             graphics.DrawArc(facePen, 8 + look, -37, 6, 7, 20, 160);
         }
-        if (anger > 0 && model.HitAge >= 0.44 && !model.IsDragging && !model.IsCrying)
+        if (anger > 0 && model.HitAge >= 0.44 && !model.IsDragging && !model.IsCrying && !model.IsEating && model.HappyRemaining == 0)
         {
             using var brows = new Pen(Tint(70, 26, 20, 0.45 + anger * 0.55), 1.5f + (float)anger * 1.5f)
                 { StartCap = LineCap.Round, EndCap = LineCap.Round };
@@ -228,6 +244,28 @@ internal static class SlimePainter
             graphics.DrawArc(motion, 56, -48 - flutter, 13, 24, -50, 100);
         }
         graphics.Restore(saved);
+
+        if (model.HappyRemaining > 0 && !model.IsCrying)
+        {
+            using var heart = new SolidBrush(Tint(255, 133, 172, Math.Min(1, model.HappyRemaining)));
+            var rise = (float)((1 - Math.Min(1, model.HappyRemaining / 2.5)) * 25);
+            for (var i = 0; i < 3; i++)
+            {
+                var x = 59 + i * 34;
+                var y = 64 - rise + (i % 2) * 9;
+                graphics.FillEllipse(heart, x, y, 7, 7);
+                graphics.FillEllipse(heart, x + 6, y, 7, 7);
+                graphics.FillPolygon(heart, [new PointF(x, y + 4), new PointF(x + 13, y + 4), new PointF(x + 6.5f, y + 13)]);
+            }
+        }
+        if (model.FeedCount > 0 && !model.IsCrying)
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                using var snackDot = new SolidBrush(i < model.FeedCount ? Tint(255, 143, 181) : Tint(255, 238, 244, 0.55));
+                graphics.FillEllipse(snackDot, 84 + i * 12, 193, 7, 7);
+            }
+        }
 
         if (model.HitAge < 0.9)
         {

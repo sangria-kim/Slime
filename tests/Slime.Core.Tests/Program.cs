@@ -286,4 +286,73 @@ for (var stage = 0; stage <= 3; stage++)
     pet.Update(SlimeModel.MeltDuration - 0.6 + SlimeModel.RespawnDelay, screens);
     Check(!pet.IsCrying && pet.PersonalityTime == 0, $"Stage {stage} respawns without crying and resets movement timing");
 }
+SlimeModel Hungry(int stage, int seed = 207)
+{
+    var pet = new SlimeModel(screens, seed);
+    for (var i = 0; i < stage; i++)
+    {
+        for (var click = 0; click < SlimeModel.RequiredClicks; click++) pet.Click();
+        pet.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay, screens);
+    }
+    pet.Update(SlimeModel.SpawnDuration, screens);
+    return pet;
+}
+void FinishMeal(SlimeModel pet)
+{
+    var expected = pet.TotalMeals + 1;
+    for (var frame = 0; frame < 600 && pet.TotalMeals < expected; frame++) pet.Update(1.0 / 30, screens);
+    Check(pet.TotalMeals == expected && !pet.IsEating && pet.Food is null, "Dropped food is approached and eaten exactly once");
+}
+var feeding = Hungry(3);
+for (var click = 0; click < 7; click++) feeding.Click();
+feeding.Update(SlimeModel.ReactionDuration, screens);
+for (var stage = 3; stage >= 0; stage--)
+{
+    for (var meal = 0; meal < 3; meal++)
+    {
+        Check(feeding.OfferFood(), "An available slime accepts one random snack");
+        Check(!feeding.OfferFood(), "Another snack cannot replace pending food");
+        var food = feeding.Food!.Value;
+        Check(food.X >= 30 && food.X <= screens[0].Width - 30 && food.Y >= 30 && food.Y <= screens[0].Height - 30,
+            "Food stays inside the desktop working area");
+        var oldClock = feeding.RedElapsed;
+        feeding.Update(0.01, screens);
+        Check(feeding.RedElapsed == oldClock && feeding.HopHeight == 0, "Feeding pauses automatic red teleport and hopping");
+        FinishMeal(feeding);
+        var expectedStage = meal < 2 ? stage : Math.Max(0, stage - 1);
+        Check(feeding.Generation == expectedStage && feeding.FeedCount == (meal + 1) % 3,
+            "Only every third completed meal calms one stage, with green as the lower limit");
+        Check(feeding.ClickCount == 7 && feeding.HappyRemaining > 0, "A meal shows happiness without clearing melt clicks");
+    }
+    Check(Math.Abs(feeding.SizeMultiplier - Math.Pow(0.9, Math.Max(0, stage - 1))) < 1e-10
+        && feeding.SpeedMultiplier == 1 + Math.Max(0, stage - 1) * 0.5, "Calming restores the stage size and speed");
+}
+var snacks = new HashSet<FoodKind>();
+for (var meal = 0; meal < 70; meal++)
+{
+    feeding.OfferFood();
+    snacks.Add(feeding.Food!.Value.Kind);
+    feeding.Update(100, screens);
+}
+Check(snacks.Count == 5 && feeding.TotalMeals == 82, "Random snacks include all five kinds and a delayed frame consumes only one meal");
+var interrupted = Hungry(2);
+interrupted.OfferFood();
+interrupted.BeginHold();
+interrupted.Update(10, screens);
+Check(interrupted.Food is not null && interrupted.TotalMeals == 0, "Holding pauses feeding without awarding a meal");
+interrupted.DragTo(interrupted.X, interrupted.Y, screens);
+interrupted.EndHold();
+Check(interrupted.Food is null && interrupted.FeedCount == 0, "Dragging cancels food without counting it");
+interrupted.OfferFood();
+for (var frame = 0; frame < 600 && !interrupted.IsEating; frame++) interrupted.Update(1.0 / 30, screens);
+Check(interrupted.IsEating && !interrupted.CanOfferFood && interrupted.FeedCount == 0, "Reaching food begins chewing before it counts");
+for (var click = 0; click < SlimeModel.RequiredClicks; click++) interrupted.Click();
+Check(interrupted.IsCrying && !interrupted.IsEating && interrupted.Food is null && !interrupted.OfferFood(),
+    "Melting cancels an unfinished meal and refuses new food");
+interrupted.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay, screens);
+Check(interrupted.FeedCount == 0 && interrupted.Food is null && !interrupted.OfferFood(), "Respawn starts with clean feeding progress and refuses food until active");
+var disconnectedFood = Hungry(1);
+disconnectedFood.OfferFood();
+disconnectedFood.Update(0.01, replacement);
+Check(disconnectedFood.Food is null && disconnectedFood.TotalMeals == 0, "Disconnected food monitor cancels the snack without credit");
 Console.WriteLine($"\nAll {passed} checks passed.");
