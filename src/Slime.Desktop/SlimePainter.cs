@@ -39,6 +39,10 @@ internal static class SlimePainter
 
         Color Tint(int red, int green, int blue, double alpha = 1) =>
             Color.FromArgb((int)Math.Clamp(255 * alpha * opacity, 0, 255), red, green, blue);
+        var anger = Smooth(model.AngerLevel);
+        Color BodyTint(int red, int green, int blue, int angryRed, int angryGreen, int angryBlue, double alpha = 1) =>
+            Tint((int)(red + (angryRed - red) * anger), (int)(green + (angryGreen - green) * anger),
+                (int)(blue + (angryBlue - blue) * anger), alpha);
 
         for (var i = 4; i >= 0; i--)
         {
@@ -79,19 +83,20 @@ internal static class SlimePainter
 
         var saved = graphics.Save();
         graphics.MultiplyTransform(transform);
-        using var darkOutline = new Pen(Tint(30, 48, 16), 1.8f) { LineJoin = LineJoin.Round };
+        using var darkOutline = new Pen(BodyTint(30, 48, 16, 93, 29, 22), 1.8f) { LineJoin = LineJoin.Round };
         graphics.DrawPath(darkOutline, antenna);
         using (var bead = new LinearGradientBrush(new PointF(-50 + sway, -21), new PointF(-50 + sway, -11),
-                   Tint(207, 252, 126), Tint(102, 177, 38)))
+                   BodyTint(207, 252, 126, 255, 185, 151), BodyTint(102, 177, 38, 210, 56, 43)))
             graphics.FillEllipse(bead, -55 + sway, -21, 10, 10);
         graphics.DrawEllipse(darkOutline, -55 + sway, -21, 10, 10);
 
         using (var fill = new LinearGradientBrush(new PointF(-20, -88), new PointF(20, 8),
-                   Tint(225, 255, 162), Tint(107, 193, 44)))
+                   BodyTint(225, 255, 162, 255, 201, 173), BodyTint(107, 193, 44, 218, 56, 44)))
         {
             fill.InterpolationColors = new ColorBlend
             {
-                Colors = [Tint(224, 254, 159), Tint(161, 224, 75), Tint(124, 207, 48), Tint(157, 224, 89)],
+                Colors = [BodyTint(224, 254, 159, 255, 201, 173), BodyTint(161, 224, 75, 255, 108, 83),
+                    BodyTint(124, 207, 48, 226, 60, 47), BodyTint(157, 224, 89, 255, 131, 104)],
                 Positions = [0, 0.35f, 0.75f, 1]
             };
             graphics.FillPath(fill, body);
@@ -103,7 +108,7 @@ internal static class SlimePainter
             graphics.FillEllipse(shine, -32, -52, 12, 7);
             graphics.FillEllipse(shine, -37, -38, 7, 5);
         }
-        using (var belly = new SolidBrush(Tint(224, 255, 167, 0.24)))
+        using (var belly = new SolidBrush(BodyTint(224, 255, 167, 255, 199, 177, 0.24)))
             graphics.FillEllipse(belly, -29, -19, 67, 21);
 
         var look = model.FacingRight ? 3 : -3;
@@ -136,10 +141,21 @@ internal static class SlimePainter
             using var tongue = new SolidBrush(Tint(250, 156, 170));
             graphics.FillEllipse(tongue, 5 + look, -26, 6, 4);
         }
+        else if (anger > 0.15)
+        {
+            graphics.DrawArc(facePen, 2 + look, -28, 12, 8, 180, 180);
+        }
         else
         {
             graphics.DrawArc(facePen, 2 + look, -36, 6, 7, 0, 160);
             graphics.DrawArc(facePen, 8 + look, -37, 6, 7, 20, 160);
+        }
+        if (anger > 0 && model.HitAge >= 0.44)
+        {
+            using var brows = new Pen(Tint(70, 26, 20, anger), 2.5f)
+                { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            graphics.DrawLine(brows, -22 + look, -53, -5 + look, -46);
+            graphics.DrawLine(brows, 18 + look, -50, 33 + look, -58);
         }
         graphics.Restore(saved);
 
@@ -159,39 +175,25 @@ internal static class SlimePainter
                     (float)(cx + Math.Cos(angle) * (radius + 8)), (float)(cy + Math.Sin(angle) * (radius + 8) * 0.6));
             }
 
-            var bubbleY = (float)(15 - Math.Min(model.HitAge / 0.4, 1) * 5);
-            using var bubble = new GraphicsPath();
-            bubble.AddArc(104, bubbleY, 14, 14, 180, 90);
-            bubble.AddArc(172, bubbleY, 14, 14, 270, 90);
-            bubble.AddArc(172, bubbleY + 22, 14, 14, 0, 90);
-            bubble.AddLine(132, bubbleY + 36, 120, bubbleY + 44);
-            bubble.AddLine(120, bubbleY + 44, 122, bubbleY + 36);
-            bubble.AddArc(104, bubbleY + 22, 14, 14, 90, 90);
-            bubble.CloseFigure();
-            using var bubbleFill = new SolidBrush(Tint(255, 253, 233, effectAlpha));
-            using var bubbleEdge = new Pen(Tint(91, 134, 47, effectAlpha), 1.6f);
-            graphics.FillPath(bubbleFill, bubble);
-            graphics.DrawPath(bubbleEdge, bubble);
-            using var text = new SolidBrush(Tint(55, 82, 25, effectAlpha));
-            using var font = new Font("Malgun Gothic", 17, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var alignment = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            graphics.DrawString("뀨..!", font, text, new RectangleF(104, bubbleY, 82, 36), alignment);
         }
 
         if (model.ClickCount > 0 && model.State != SlimeState.Spawning)
         {
+            const int columns = 10;
             for (var i = 0; i < SlimeModel.RequiredClicks; i++)
             {
                 using var dot = new SolidBrush(i < model.ClickCount ? Tint(255, 213, 109) : Tint(238, 255, 241, 0.5));
                 using var edge = new Pen(Tint(79, 132, 103, 0.7), 1.2f);
-                graphics.FillEllipse(dot, 72 + i * 11, 205, 7, 7);
-                graphics.DrawEllipse(edge, 72 + i * 11, 205, 7, 7);
+                var x = 55 + i % columns * 9;
+                var y = 204 + i / columns * 9;
+                graphics.FillEllipse(dot, x, y, 5, 5);
+                graphics.DrawEllipse(edge, x, y, 5, 5);
             }
         }
 
         if (model.State == SlimeState.Melting)
         {
-            using var droplet = new SolidBrush(Tint(149, 220, 65));
+            using var droplet = new SolidBrush(BodyTint(149, 220, 65, 244, 91, 67));
             for (var i = 0; i < 4; i++)
             {
                 var side = i < 2 ? -1 : 1;

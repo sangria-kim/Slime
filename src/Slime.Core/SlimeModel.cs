@@ -10,11 +10,13 @@ public sealed class SlimeModel
 {
     public const int WindowWidth = 196;
     public const int WindowHeight = 236;
-    public const int RequiredClicks = 5;
+    public const int RequiredClicks = 30;
     public const double MeltDuration = 1.15;
     public const double RespawnDelay = 10;
     public const double SpawnDuration = 0.65;
     public const double ReactionDuration = 0.75;
+    public const double AngryDuration = 4;
+    public const double CalmDuration = 2.5;
 
     private readonly Random random;
     private DesktopArea area;
@@ -36,6 +38,8 @@ public sealed class SlimeModel
     public double StateTime { get; private set; }
     public double HitAge { get; private set; } = 100;
     public bool IsHeld { get; private set; }
+    public double AngerRemaining { get; private set; }
+    public double AngerLevel => Math.Clamp(AngerRemaining / CalmDuration, 0, 1);
     public ReactionPose Reaction
     {
         get
@@ -126,6 +130,8 @@ public sealed class SlimeModel
                 _ => double.PositiveInfinity
             };
             var step = Math.Min(remaining, duration - StateTime);
+            if (State is SlimeState.Spawning or SlimeState.Active)
+                AngerRemaining = Math.Max(0, AngerRemaining - step);
             if (State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration) Move(Math.Min(step, 0.1));
             StateTime += step;
             remaining -= step;
@@ -138,6 +144,7 @@ public sealed class SlimeModel
                 case SlimeState.Hidden:
                     ClickCount = 0;
                     HitAge = 100;
+                    AngerRemaining = AngryDuration;
                     Place(screens);
                     State = SlimeState.Spawning;
                     break;

@@ -12,11 +12,12 @@ void Check(bool condition, string message)
 var slime = new SlimeModel(screens, 42);
 slime.Update(SlimeModel.SpawnDuration, screens);
 Check(slime.State == SlimeState.Active, "Initial spawn becomes active");
-for (var i = 0; i < 4; i++) slime.Click();
-Check(slime.State == SlimeState.Active && slime.ClickCount == 4, "Four clicks do not melt the slime");
+Check(slime.AngerLevel == 0, "Initial spawn starts calm and green");
+for (var i = 0; i < 29; i++) slime.Click();
+Check(slime.State == SlimeState.Active && slime.ClickCount == 29, "Twenty-nine clicks do not melt the slime");
 slime.Click();
-Check(slime.State == SlimeState.Melting && slime.ClickCount == 5, "Exactly the fifth click begins melting");
-Check(!slime.Click() && slime.ClickCount == 5, "Clicks during melting are ignored");
+Check(slime.State == SlimeState.Melting && slime.ClickCount == 30, "Exactly the thirtieth click begins melting");
+Check(!slime.Click() && slime.ClickCount == 30, "Clicks during melting are ignored");
 slime.Update(SlimeModel.MeltDuration, screens);
 Check(slime.State == SlimeState.Hidden, "Hidden only after the melt animation finishes");
 Check(!slime.Click(), "Hidden slime cannot be clicked");
@@ -28,13 +29,13 @@ slime.Update(SlimeModel.SpawnDuration, screens);
 Check(slime.State == SlimeState.Active, "Respawn completes");
 
 var quick = new SlimeModel(screens, 1);
-for (var i = 0; i < 5; i++) quick.Click();
-Check(quick.State == SlimeState.Melting, "Five rapid clicks during spawn also melt the slime");
+for (var i = 0; i < SlimeModel.RequiredClicks; i++) quick.Click();
+Check(quick.State == SlimeState.Melting, "Thirty rapid clicks during spawn also melt the slime");
 quick.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + SlimeModel.SpawnDuration + 0.1, screens);
 Check(quick.State == SlimeState.Active && quick.ClickCount == 0, "Elapsed time crossing multiple phases is preserved");
 
 var exact = new SlimeModel(screens, 2);
-for (var i = 0; i < 5; i++) exact.Click();
+for (var i = 0; i < SlimeModel.RequiredClicks; i++) exact.Click();
 exact.Update(SlimeModel.MeltDuration, screens);
 exact.Update(10, screens);
 Check(exact.State == SlimeState.Spawning && exact.StateTime == 0, "Exactly ten seconds after hiding starts the spawn");
@@ -60,7 +61,7 @@ slime.Update(0.1, tiny);
 Check(slime.X == 0 && slime.Y == 0, "Small working areas do not cause invalid random ranges");
 for (var cycle = 0; cycle < 20; cycle++)
 {
-    for (var click = 0; click < 5; click++) slime.Click();
+    for (var click = 0; click < SlimeModel.RequiredClicks; click++) slime.Click();
     slime.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + SlimeModel.SpawnDuration + 0.1, tiny);
     if (slime.State != SlimeState.Active || slime.ClickCount != 0) throw new Exception("Repeated lifecycle failed");
 }
@@ -101,7 +102,7 @@ pointer.Cancel();
 Check(!pointer.IsPressed && !dragged.IsHeld && dragged.ClickCount == 1, "Losing mouse capture cancels without clicking");
 dragged.Update(0.1, multi);
 Check(dragged.X != -1280 || dragged.Y != -200, "Crawling resumes after the grab ends");
-for (var i = 0; i < 4; i++) dragged.Click();
+for (var i = 0; i < SlimeModel.RequiredClicks - 1; i++) dragged.Click();
 Check(dragged.State == SlimeState.Melting && !pointer.Press(0, 0), "Melting slime cannot be grabbed");
 dragged.Update(SlimeModel.MeltDuration, multi);
 Check(!pointer.Press(0, 0), "Hidden slime cannot be grabbed");
@@ -109,4 +110,20 @@ dragged.Update(SlimeModel.RespawnDelay, multi);
 Check(dragged.ClickCount == 0 && pointer.Press(dragged.X + 80, dragged.Y + 150),
     "A respawned slime can be grabbed again");
 pointer.Cancel();
+Check(dragged.AngerLevel == 1, "Respawn begins fully angry and red");
+dragged.Update(1.0, multi);
+Check(dragged.AngerLevel == 1, "Anger stays fully visible during the initial respawn");
+dragged.Update(1.5, multi);
+Check(dragged.AngerLevel > 0 && dragged.AngerLevel < 1, "Anger fades gradually toward the normal appearance");
+var previousAnger = dragged.AngerLevel;
+pointer.Press(dragged.X + 80, dragged.Y + 150);
+dragged.Update(0.5, multi);
+Check(dragged.AngerLevel < previousAnger, "Dragging does not freeze the calming animation");
+pointer.Cancel();
+dragged.Update(1.0, multi);
+Check(dragged.AngerLevel == 0, "Anger ends exactly four seconds after reappearance");
+for (var i = 0; i < SlimeModel.RequiredClicks; i++) dragged.Click();
+dragged.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + 10, multi);
+Check(dragged.State == SlimeState.Active && dragged.AngerLevel == 0,
+    "Large elapsed updates preserve the full anger and calm lifecycle");
 Console.WriteLine($"\nAll {passed} checks passed.");

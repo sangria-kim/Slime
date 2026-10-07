@@ -37,7 +37,7 @@ internal sealed class SlimeWindow : Form
         menu.Items.Add("슬라임 종료", null, (_, _) => Close());
         petIcon = CreatePetIcon();
         Icon = petIcon;
-        tray = new NotifyIcon { Icon = petIcon, Text = "슬라임 · 5번 클릭하면 녹아요", ContextMenuStrip = menu, Visible = true };
+        tray = new NotifyIcon { Icon = petIcon, Text = "슬라임 · 30번 클릭하면 녹아요", ContextMenuStrip = menu, Visible = true };
         MouseDown += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
