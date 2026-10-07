@@ -37,7 +37,14 @@ internal static class SlimePainter
         height *= 1 + (reaction.Height - 1) * reactionStrength;
         width *= model.SizeMultiplier;
         height *= model.SizeMultiplier;
-        var lift = reaction.Lift * reactionStrength * model.SizeMultiplier;
+        var lift = reaction.Lift * reactionStrength * model.SizeMultiplier + model.HopHeight;
+        if (model.HopHeight > 0)
+        {
+            var stretch = model.HopHeight / SlimeModel.RedHopHeight;
+            width *= 1 - stretch * 0.10;
+            height *= 1 + stretch * 0.12;
+        }
+        opacity *= model.BlinkOpacity;
 
         Color Tint(int red, int green, int blue, double alpha = 1) =>
             Color.FromArgb((int)Math.Clamp(255 * alpha * opacity, 0, 255), red, green, blue);

@@ -17,6 +17,9 @@ public sealed class SlimeModel
     public const double SpawnDuration = 0.65;
     public const double ReactionDuration = 0.75;
     public const int FinalGeneration = 3;
+    public const double RedTeleportInterval = 5;
+    public const double RedBlinkDuration = 0.3;
+    public const double RedHopHeight = 44;
 
     private readonly Random random;
     private readonly double baseSpeed;
@@ -43,9 +46,16 @@ public sealed class SlimeModel
     public int Generation { get; private set; }
     public SlimeMood Mood => (SlimeMood)Generation;
     public double SizeMultiplier => Math.Pow(0.9, Generation);
-    public double SpeedMultiplier => Math.Pow(1.2, Generation);
+    public double SpeedMultiplier => 1 + Generation * 0.5;
     public double AngerLevel => Generation / (double)FinalGeneration;
     public double MovementSpeed => Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
+    public double RedElapsed { get; private set; }
+    public double BlinkRemaining { get; private set; }
+    public int TeleportCount { get; private set; }
+    public double BlinkOpacity => BlinkRemaining > RedBlinkDuration / 2 ? 0
+        : 1 - BlinkRemaining / (RedBlinkDuration / 2);
+    public double HopHeight => Mood == SlimeMood.Red && State == SlimeState.Active && !IsHeld
+        ? Math.Abs(Math.Sin(RedElapsed * Math.PI / 0.65)) * RedHopHeight : 0;
     public ReactionPose Reaction
     {
         get
@@ -81,7 +91,7 @@ public sealed class SlimeModel
 
     public bool Click()
     {
-        if (State is SlimeState.Melting or SlimeState.Hidden) return false;
+        if (State is SlimeState.Melting or SlimeState.Hidden || BlinkOpacity == 0) return false;
         ClickCount++;
         HitAge = 0;
         if (ClickCount == RequiredClicks)
@@ -94,7 +104,7 @@ public sealed class SlimeModel
 
     public bool BeginHold()
     {
-        if (State is SlimeState.Hidden or SlimeState.Melting) return false;
+        if (State is SlimeState.Hidden or SlimeState.Melting || BlinkOpacity == 0) return false;
         IsHeld = true;
         return true;
     }
@@ -136,6 +146,8 @@ public sealed class SlimeModel
                 _ => double.PositiveInfinity
             };
             var step = Math.Min(remaining, duration - StateTime);
+            if ((State is SlimeState.Spawning or SlimeState.Active) && Mood == SlimeMood.Red && !IsHeld)
+                UpdateRedTiming(step, screens);
             if (State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration) Move(Math.Min(step, 0.1));
             StateTime += step;
             remaining -= step;
@@ -149,11 +161,33 @@ public sealed class SlimeModel
                     ClickCount = 0;
                     HitAge = 100;
                     Generation = (Generation + 1) % (FinalGeneration + 1);
+                    RedElapsed = 0;
+                    BlinkRemaining = 0;
+                    TeleportCount = 0;
                     Place(screens);
                     State = SlimeState.Spawning;
                     break;
             }
         }
+    }
+
+    private void UpdateRedTiming(double seconds, IReadOnlyList<DesktopArea> screens)
+    {
+        BlinkRemaining = Math.Max(0, BlinkRemaining - seconds);
+        RedElapsed += seconds;
+        if (RedElapsed < RedTeleportInterval) return;
+        var events = Math.Floor(RedElapsed / RedTeleportInterval);
+        RedElapsed %= RedTeleportInterval;
+        TeleportCount = (int)Math.Min(int.MaxValue, TeleportCount + events);
+        var previousX = X;
+        var previousY = Y;
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            Place(screens);
+            if (Math.Abs(X - previousX) + Math.Abs(Y - previousY) >= 120) break;
+        }
+        // Preserve the elapsed remainder when a delayed frame crosses several five-second intervals.
+        BlinkRemaining = Math.Max(0, RedBlinkDuration - RedElapsed);
     }
 
     private void Place(IReadOnlyList<DesktopArea> screens)

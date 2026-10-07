@@ -117,11 +117,10 @@ Check(evolving.Mood == SlimeMood.Green && evolving.SizeMultiplier == 1 && evolvi
     "Initial slime is full-size, green and happy");
 var moods = new[] { SlimeMood.Yellow, SlimeMood.Orange, SlimeMood.Red };
 var expectedSizes = new[] { 0.9, 0.81, 0.729 };
-var expectedSpeeds = new[] { 1.2, 1.44, 1.728 };
+var expectedSpeeds = new[] { 1.5, 2.0, 2.5 };
 for (var stage = 0; stage < 3; stage++)
 {
     var oldSize = evolving.SizeMultiplier;
-    var oldSpeed = evolving.MovementSpeed;
     var oldAnger = evolving.AngerLevel;
     for (var click = 0; click < SlimeModel.RequiredClicks; click++) evolving.Click();
     evolving.Update(SlimeModel.MeltDuration, screens);
@@ -133,8 +132,8 @@ for (var stage = 0; stage < 3; stage++)
           Math.Abs(evolving.SizeMultiplier / oldSize - 0.9) < 1e-10,
         $"Respawn {stage + 1} shrinks exactly ten percent from the previous size");
     Check(Math.Abs(evolving.MovementSpeed / initialSpeed - expectedSpeeds[stage]) < 1e-10 &&
-          Math.Abs(evolving.MovementSpeed / oldSpeed - 1.2) < 1e-10,
-        $"Respawn {stage + 1} increases actual movement speed by twenty percent");
+          Math.Abs(evolving.SpeedMultiplier - expectedSpeeds[stage]) < 1e-10,
+        $"Respawn {stage + 1} uses the requested movement speed multiplier");
     Check(evolving.AngerLevel > oldAnger, $"Respawn {stage + 1} is angrier than the previous stage");
     evolving.Update(30, screens);
     Check(evolving.Mood == moods[stage] && evolving.AngerLevel > 0,
@@ -163,4 +162,48 @@ Check(evolving.Mood == SlimeMood.Green && evolving.SizeMultiplier == 1 && evolvi
     "Three more complete green/yellow/orange/red cycles return to the original green state");
 var fresh = new SlimeModel(screens, 19);
 Check(fresh.Generation == 0 && fresh.Mood == SlimeMood.Green, "Restarting begins again at the happy green stage");
+var red = new SlimeModel(screens, 73);
+for (var stage = 0; stage < 3; stage++)
+{
+    for (var click = 0; click < SlimeModel.RequiredClicks; click++) red.Click();
+    red.Update(SlimeModel.MeltDuration, screens);
+    red.Update(SlimeModel.RespawnDelay, screens);
+}
+Check(red.Mood == SlimeMood.Red && red.RedElapsed == 0 && red.TeleportCount == 0,
+    "Red teleport clock starts at reappearance");
+red.Update(0.975, screens);
+Check(Math.Abs(red.HopHeight - 44) < 1e-10, "Red continuously hops to 44 pixels without a click");
+red.Click();
+red.Update(4.024, screens);
+Check(red.TeleportCount == 0, "Red does not teleport before five seconds");
+red.Update(0.002, screens);
+Check(red.TeleportCount == 1 && red.BlinkOpacity == 0 && red.Mood == SlimeMood.Red && red.ClickCount == 1,
+    "Five-second teleport briefly disappears without changing color or click count");
+Check(!red.Click() && !red.BeginHold(), "Invisible red slime cannot be clicked or grabbed");
+var teleportX = red.X;
+var teleportY = red.Y;
+red.Update(0.3, screens);
+Check(red.BlinkRemaining == 0 && red.BlinkOpacity == 1, "Red reappears after the brief blink");
+red.Update(4.7, screens);
+Check(red.TeleportCount == 2 && (red.X != teleportX || red.Y != teleportY),
+    "Next five-second teleport moves to another location");
+red.Update(0.3, screens);
+red.BeginHold();
+var heldCount = red.TeleportCount;
+var heldElapsed = red.RedElapsed;
+red.Update(10, screens);
+Check(red.TeleportCount == heldCount && red.RedElapsed == heldElapsed && red.HopHeight == 0,
+    "Dragging pauses red hopping and teleporting");
+red.EndHold();
+red.Update(15, screens);
+Check(red.TeleportCount == heldCount + 3 && red.BlinkRemaining == 0,
+    "Long elapsed updates preserve teleport intervals without a stale invisible state");
+for (var i = red.ClickCount; i < SlimeModel.RequiredClicks; i++) red.Click();
+var meltTeleportCount = red.TeleportCount;
+red.Update(SlimeModel.MeltDuration, screens);
+Check(red.State == SlimeState.Hidden && red.TeleportCount == meltTeleportCount,
+    "Thirty clicks still melt red normally and stop automatic teleporting");
+red.Update(SlimeModel.RespawnDelay, screens);
+Check(red.Mood == SlimeMood.Green && red.BlinkRemaining == 0 && red.TeleportCount == 0 && red.HopHeight == 0,
+    "Red-to-green respawn resets hopping and teleport state");
 Console.WriteLine($"\nAll {passed} checks passed.");
