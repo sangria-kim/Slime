@@ -42,8 +42,8 @@ Check(exact.State == SlimeState.Spawning && exact.StateTime == 0, "Exactly ten s
 
 var beforeX = slime.X;
 var beforeY = slime.Y;
-slime.Update(0.1, screens);
-Check(slime.X != beforeX || slime.Y != beforeY, "An active slime crawls");
+slime.Update(0.6, screens);
+Check(slime.X != beforeX || slime.Y != beforeY, "An active slime moves after its short personality pause");
 for (var i = 0; i < 30000; i++)
 {
     slime.Update(1.0 / 30, screens);
@@ -229,4 +229,61 @@ Check(red.TeleportDepartureProgress == 0 && red.TeleportArrivalProgress == 1,
 red.Update(SlimeModel.RespawnDelay, screens);
 Check(red.Mood == SlimeMood.Green && red.BlinkRemaining == 0 && red.TeleportCount == 0 && red.HopHeight == 0,
     "Red-to-green respawn resets hopping and teleport state");
+for (var stage = 0; stage <= 3; stage++)
+{
+    var pet = new SlimeModel(screens, 101 + stage);
+    for (var generation = 0; generation < stage; generation++)
+    {
+        for (var click = 0; click < SlimeModel.RequiredClicks; click++) pet.Click();
+        pet.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay, screens);
+    }
+    pet.Update(SlimeModel.SpawnDuration, screens);
+    if (stage == 0)
+    {
+        pet.Update(4.9, screens);
+        var pauseX = pet.X;
+        var pauseY = pet.Y;
+        pet.Update(0.3, screens);
+        Check(pet.CrawlMultiplier == 0 && pet.PersonalityPose.Tilt > 0 && pet.X == pauseX && pet.Y == pauseY,
+            "Green pauses in place to tilt its head");
+        pet.Update(1, screens);
+        Check(pet.CrawlMultiplier == 1 && (pet.X != pauseX || pet.Y != pauseY),
+            "Green resumes crawling after looking around");
+    }
+    else if (stage == 1)
+    {
+        pet.Update(0.2, screens);
+        Check(pet.CrawlMultiplier == 0 && pet.PersonalityPose.Tilt != 0,
+            "Yellow stops to tremble before hopping");
+        pet.Update(0.6, screens);
+        Check(pet.PersonalityPose.Lift > 10 && pet.CrawlMultiplier == 1, "Yellow makes its first small moving hop");
+        pet.Update(0.45, screens);
+        Check(pet.PersonalityPose.Lift > 10, "Yellow makes its second small hop");
+        pet.Update(0.4, screens);
+        Check(pet.PersonalityPose.Lift == 0, "Yellow lands after the pair of hops");
+    }
+    else if (stage == 2)
+    {
+        pet.Update(3.4, screens);
+        Check(pet.CrawlMultiplier == 0 && pet.PersonalityPose.Width > 1 && pet.PersonalityPose.Height < 1,
+            "Orange squashes in place to charge a dash");
+        pet.Update(0.4, screens);
+        Check(pet.CrawlMultiplier == 3 && pet.PersonalityPose.Tilt != 0,
+            "Orange releases its charge into a fast leaning dash");
+        pet.Update(0.5, screens);
+        Check(pet.CrawlMultiplier == 1, "Orange returns to normal speed after the dash");
+    }
+    var personalityTime = pet.PersonalityTime;
+    pet.BeginHold();
+    pet.Update(0.2, screens);
+    Check(pet.PersonalityTime == personalityTime && pet.CrawlMultiplier == 0
+        && pet.PersonalityPose == new ReactionPose(1, 1, 0, 0), $"Stage {stage} pauses its personality while held");
+    pet.EndHold();
+    for (var click = 0; click < SlimeModel.RequiredClicks; click++) pet.Click();
+    Check(pet.IsCrying && pet.CrawlMultiplier == 0, $"Stage {stage} starts crying at the thirtieth click");
+    pet.Update(0.6, screens);
+    Check(pet.IsCrying, $"Stage {stage} keeps crying throughout melting");
+    pet.Update(SlimeModel.MeltDuration - 0.6 + SlimeModel.RespawnDelay, screens);
+    Check(!pet.IsCrying && pet.PersonalityTime == 0, $"Stage {stage} respawns without crying and resets movement timing");
+}
 Console.WriteLine($"\nAll {passed} checks passed.");

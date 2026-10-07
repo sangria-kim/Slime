@@ -59,6 +59,55 @@ public sealed class SlimeModel
     public double SpeedMultiplier => 1 + Generation * 0.5;
     public double AngerLevel => Generation / (double)FinalGeneration;
     public double MovementSpeed => Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
+    public double PersonalityTime { get; private set; }
+    public bool IsCrying => State == SlimeState.Melting;
+    private bool CanMoveFreely => State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration;
+    public double CrawlMultiplier => !CanMoveFreely ? 0 : Mood switch
+    {
+        SlimeMood.Green => PersonalityTime % 6 is >= 4.8 and < 5.8 ? 0 : 1,
+        SlimeMood.Yellow => PersonalityTime % 4 < 0.55 ? 0 : 1,
+        SlimeMood.Orange => (PersonalityTime % 4.5) switch
+        {
+            >= 3.1 and < 3.7 => 0,
+            >= 3.7 and < 4.15 => 3,
+            _ => 1
+        },
+        _ => 1
+    };
+    public ReactionPose PersonalityPose
+    {
+        get
+        {
+            if (!CanMoveFreely) return new(1, 1, 0, 0);
+            var t = PersonalityTime;
+            switch (Mood)
+            {
+                case SlimeMood.Green:
+                    var green = t % 6;
+                    return green is >= 4.8 and < 5.8
+                        ? new(1, 1, 0, Math.Sin((green - 4.8) * Math.PI) * 10)
+                        : new(1 + Math.Sin(t * 4) * 0.04, 1 - Math.Sin(t * 4) * 0.03, 0, 0);
+                case SlimeMood.Yellow:
+                    var yellow = t % 4;
+                    if (yellow < 0.55) return new(1.06, 0.94, 0, Math.Sin(yellow * 65) * 5);
+                    var hop = yellow is >= 0.65 and < 1 ? (yellow - 0.65) / 0.35
+                        : yellow is >= 1.1 and < 1.45 ? (yellow - 1.1) / 0.35 : 0;
+                    var bounce = Math.Sin(hop * Math.PI);
+                    return new(1 - bounce * 0.08, 1 + bounce * 0.1, bounce * 14, 0);
+                case SlimeMood.Orange:
+                    var orange = t % 4.5;
+                    if (orange is >= 3.1 and < 3.7)
+                    {
+                        var charge = (orange - 3.1) / 0.6;
+                        return new(1 + charge * 0.28, 1 - charge * 0.25, 0, 0);
+                    }
+                    if (orange is >= 3.7 and < 4.15)
+                        return new(1.22, 0.84, 3, FacingRight ? 7 : -7);
+                    return new(1, 1, 0, 0);
+                default: return new(1, 1, 0, 0);
+            }
+        }
+    }
     public double RedElapsed { get; private set; }
     public double BlinkRemaining { get; private set; }
     public int TeleportCount { get; private set; }
@@ -171,7 +220,11 @@ public sealed class SlimeModel
             var step = Math.Min(remaining, duration - StateTime);
             if ((State is SlimeState.Spawning or SlimeState.Active) && Mood == SlimeMood.Red && !IsHeld)
                 UpdateRedTiming(step, screens);
-            if (State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration) Move(Math.Min(step, 0.1));
+            if (CanMoveFreely)
+            {
+                PersonalityTime += step;
+                Move(Math.Min(step, 0.1) * CrawlMultiplier);
+            }
             StateTime += step;
             remaining -= step;
             if (StateTime < duration) break;
@@ -185,6 +238,7 @@ public sealed class SlimeModel
                     HitAge = 100;
                     Generation = (Generation + 1) % (FinalGeneration + 1);
                     RedElapsed = 0;
+                    PersonalityTime = 0;
                     BlinkRemaining = 0;
                     TeleportCount = 0;
                     Place(screens);

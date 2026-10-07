@@ -32,15 +32,18 @@ internal static class SlimePainter
         }
         var reaction = model.Reaction;
         var struggle = model.Struggle;
+        var personality = model.PersonalityPose;
         var reactionStrength = model.State == SlimeState.Melting
             ? 1 - Smooth(Math.Clamp(model.StateTime / 0.35, 0, 1)) : 1;
         width *= 1 + (reaction.Width - 1) * reactionStrength;
         height *= 1 + (reaction.Height - 1) * reactionStrength;
         width *= struggle.Width;
         height *= struggle.Height;
+        width *= personality.Width;
+        height *= personality.Height;
         width *= model.SizeMultiplier;
         height *= model.SizeMultiplier;
-        var lift = (reaction.Lift * reactionStrength + struggle.Lift) * model.SizeMultiplier + model.HopHeight;
+        var lift = (reaction.Lift * reactionStrength + struggle.Lift + personality.Lift) * model.SizeMultiplier + model.HopHeight;
         if (model.HopHeight > 0)
         {
             var stretch = model.HopHeight / SlimeModel.RedHopHeight;
@@ -81,14 +84,14 @@ internal static class SlimePainter
         body.CloseFigure();
 
         // MapleStory's long curled feeler ends in a small green bead.
-        var sway = (float)(Math.Sin(time * 3.2) * 3 + reaction.Tilt * reactionStrength + struggle.Tilt * 0.6);
+        var sway = (float)(Math.Sin(time * 3.2) * 3 + reaction.Tilt * reactionStrength + struggle.Tilt * 0.6 + personality.Tilt * 0.6);
         using var antenna = new GraphicsPath();
         antenna.AddBezier(-8, -85, -23 + sway, -110, -40 + sway, -95, -38, -65);
         antenna.AddBezier(-38, -65, -39, -43, -38 + sway, -22, -49 + sway, -17);
 
         using var transform = new Matrix();
         transform.Translate(98, 181 - (float)lift);
-        transform.Rotate((float)(reaction.Tilt * reactionStrength + struggle.Tilt));
+        transform.Rotate((float)(reaction.Tilt * reactionStrength + struggle.Tilt + personality.Tilt));
         transform.Scale((float)width, (float)height);
         var hitShape = (GraphicsPath)body.Clone();
         hitShape.FillMode = FillMode.Winding;
@@ -135,7 +138,25 @@ internal static class SlimePainter
         var blink = time % 4.6 > 4.43;
         using var face = new SolidBrush(Tint(22, 33, 11));
         using var facePen = new Pen(Tint(22, 33, 11), 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-        if (model.IsDragging || model.HitAge < 0.44)
+        if (model.IsCrying)
+        {
+            graphics.DrawArc(facePen, -20 + look, -43, 17, 9, 190, 160);
+            graphics.DrawArc(facePen, 16 + look, -47, 17, 9, 190, 160);
+            using var tears = new SolidBrush(Tint(135, 223, 255, 0.95));
+            using var tearShine = new Pen(Tint(233, 255, 255, 0.9), 1.2f);
+            for (var eye = 0; eye < 2; eye++)
+            {
+                var x = (eye == 0 ? -12 : 24) + look;
+                for (var drop = 0; drop < 2; drop++)
+                {
+                    var fall = (model.StateTime * 45 + drop * 16) % 32;
+                    var y = (float)((eye == 0 ? -36 : -40) + fall);
+                    graphics.FillEllipse(tears, x - 3, y, 6, 9);
+                    graphics.DrawLine(tearShine, x - 1, y + 2, x - 1, y + 5);
+                }
+            }
+        }
+        else if (model.IsDragging || model.HitAge < 0.44)
         {
             graphics.DrawLines(facePen, [new PointF(-17 + look, -44), new PointF(-10 + look, -38), new PointF(-17 + look, -32)]);
             graphics.DrawLines(facePen, [new PointF(29 + look, -48), new PointF(22 + look, -42), new PointF(29 + look, -36)]);
@@ -155,7 +176,16 @@ internal static class SlimePainter
             graphics.DrawLine(glint, 24.5f + look, -46, 24.5f + look, -38);
             graphics.DrawLine(glint, 21 + look, -42, 28 + look, -42);
         }
-        if (model.IsDragging || model.HitAge < 0.44)
+        if (model.IsCrying)
+        {
+            var sob = (float)(Math.Sin(model.StateTime * 25) * 1.5);
+            graphics.FillEllipse(face, 1 + look, -28, 15, 10 + sob);
+            using var mouth = new SolidBrush(Tint(243, 145, 169));
+            graphics.FillEllipse(mouth, 4 + look, -24, 9, 4);
+            graphics.DrawLine(facePen, -20 + look, -51, -5 + look, -54);
+            graphics.DrawLine(facePen, 17 + look, -58, 32 + look, -55);
+        }
+        else if (model.IsDragging || model.HitAge < 0.44)
         {
             graphics.FillEllipse(face, 3 + look, -33, 10, 12);
             using var tongue = new SolidBrush(Tint(250, 156, 170));
@@ -175,7 +205,7 @@ internal static class SlimePainter
             graphics.DrawArc(facePen, 2 + look, -36, 6, 7, 0, 160);
             graphics.DrawArc(facePen, 8 + look, -37, 6, 7, 20, 160);
         }
-        if (anger > 0 && model.HitAge >= 0.44 && !model.IsDragging)
+        if (anger > 0 && model.HitAge >= 0.44 && !model.IsDragging && !model.IsCrying)
         {
             using var brows = new Pen(Tint(70, 26, 20, 0.45 + anger * 0.55), 1.5f + (float)anger * 1.5f)
                 { StartCap = LineCap.Round, EndCap = LineCap.Round };
