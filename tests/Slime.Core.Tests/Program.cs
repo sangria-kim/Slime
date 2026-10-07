@@ -65,4 +65,48 @@ for (var cycle = 0; cycle < 20; cycle++)
     if (slime.State != SlimeState.Active || slime.ClickCount != 0) throw new Exception("Repeated lifecycle failed");
 }
 Check(true, "Twenty repeated melt/respawn cycles reset correctly");
+
+var dragged = new SlimeModel(screens, 7);
+dragged.Update(SlimeModel.SpawnDuration, screens);
+var pointer = new PointerInteraction(dragged);
+var originX = dragged.X;
+var originY = dragged.Y;
+Check(pointer.Press(originX + 80, originY + 150), "Visible slime can be grabbed");
+dragged.Update(0.1, screens);
+Check(dragged.X == originX && dragged.Y == originY, "Holding the mouse pauses crawling");
+pointer.Move(originX + 82, originY + 152, screens);
+Check(!pointer.IsDragging, "Small mouse jitter remains a click");
+Check(pointer.Release(originX + 82, originY + 152, screens) && dragged.ClickCount == 1,
+    "Release without dragging counts one click");
+dragged.Update(0.1, screens);
+Check(dragged.Reaction.Width > 1.3 && dragged.Reaction.Height < 0.75, "Click produces a large squash");
+dragged.Update(0.18, screens);
+Check(dragged.Reaction.Lift > 20 && dragged.Reaction.Height > 1.2, "Squash springs into a visible jump");
+dragged.Update(SlimeModel.ReactionDuration, screens);
+Check(dragged.Reaction == new ReactionPose(1, 1, 0, 0), "Reaction settles back to normal");
+pointer.Press(dragged.X + 80, dragged.Y + 150);
+pointer.Move(500, 450, screens);
+Check(pointer.IsDragging && dragged.X == 420 && dragged.Y == 300, "Dragging preserves the grab offset");
+pointer.Move(501, 451, screens);
+Check(dragged.X == 421 && dragged.Y == 301, "Repeated drag motion follows the pointer without drift");
+Check(!pointer.Release(501, 451, screens) && dragged.ClickCount == 1 && !dragged.IsHeld,
+    "Dragging never increments the melt click count");
+var multi = new[] { screens[0], new DesktopArea(-1280, -200, 1280, 900) };
+pointer.Press(dragged.X + 80, dragged.Y + 150);
+pointer.Move(-500, 300, multi);
+Check(dragged.X == -580 && dragged.Y == 150, "Dragging can move to a monitor with negative coordinates");
+pointer.Move(-3000, -3000, multi);
+Check(dragged.X == -1280 && dragged.Y == -200, "Dragging clamps at the target monitor edge");
+pointer.Cancel();
+Check(!pointer.IsPressed && !dragged.IsHeld && dragged.ClickCount == 1, "Losing mouse capture cancels without clicking");
+dragged.Update(0.1, multi);
+Check(dragged.X != -1280 || dragged.Y != -200, "Crawling resumes after the grab ends");
+for (var i = 0; i < 4; i++) dragged.Click();
+Check(dragged.State == SlimeState.Melting && !pointer.Press(0, 0), "Melting slime cannot be grabbed");
+dragged.Update(SlimeModel.MeltDuration, multi);
+Check(!pointer.Press(0, 0), "Hidden slime cannot be grabbed");
+dragged.Update(SlimeModel.RespawnDelay, multi);
+Check(dragged.ClickCount == 0 && pointer.Press(dragged.X + 80, dragged.Y + 150),
+    "A respawned slime can be grabbed again");
+pointer.Cancel();
 Console.WriteLine($"\nAll {passed} checks passed.");

@@ -8,6 +8,8 @@ namespace Slime.Desktop;
 internal sealed class SlimeWindow : Form
 {
     private readonly SlimeModel model;
+    private readonly PointerInteraction pointer;
+    private readonly SqueakSound squeak = new();
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 33 };
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly ContextMenuStrip menu = new();
@@ -23,6 +25,7 @@ internal sealed class SlimeWindow : Form
     {
         screens = ReadScreens();
         model = new SlimeModel(screens);
+        pointer = new PointerInteraction(model);
         Text = "Slime";
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -37,9 +40,30 @@ internal sealed class SlimeWindow : Form
         tray = new NotifyIcon { Icon = petIcon, Text = "슬라임 · 5번 클릭하면 녹아요", ContextMenuStrip = menu, Visible = true };
         MouseDown += (_, e) =>
         {
-            if (e.Button == MouseButtons.Left) model.Click();
+            if (e.Button == MouseButtons.Left)
+            {
+                var position = Cursor.Position;
+                if (pointer.Press(position.X, position.Y)) Capture = true;
+            }
             else if (e.Button == MouseButtons.Right) menu.Show(Cursor.Position);
         };
+        MouseMove += (_, _) =>
+        {
+            if (!pointer.IsPressed) return;
+            var position = Cursor.Position;
+            pointer.Move(position.X, position.Y, screens);
+            Render();
+        };
+        MouseUp += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            var position = Cursor.Position;
+            var clicked = pointer.Release(position.X, position.Y, screens);
+            Capture = false;
+            if (clicked) squeak.Play();
+            Render();
+        };
+        MouseCaptureChanged += (_, _) => { if (!Capture) pointer.Cancel(); };
         timer.Tick += (_, _) => TickFrame();
     }
 
@@ -157,6 +181,8 @@ internal sealed class SlimeWindow : Form
         {
             timer.Stop();
             timer.Dispose();
+            pointer.Cancel();
+            squeak.Dispose();
             tray.Visible = false;
             tray.Dispose();
             menu.Dispose();
