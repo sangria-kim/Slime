@@ -1,0 +1,36 @@
+# 바탕화면 슬라임
+
+윈도우 바탕화면 위를 천천히 기어 다니는 메이플스토리 슬라임 스타일의 연두색 슬라임입니다. 물방울 몸통, 둥근 방울이 달린 긴 머리 꼭지, 노란 십자 눈과 작은 입을 직접 그렸습니다. 투명 배경, 말랑한 움직임, 눈 깜빡임과 클릭 반응을 넣었습니다.
+
+디자인은 [메이플스토리 공식 슬라임 소개 이미지](https://lwi.nexon.com/maplestory/mobile/2023/0420_BA12BD45D36F8891/s2_obj_0066j34qbi3x3s63jvxi4wg.png)를 참고했습니다.
+
+## 실행
+
+`dist/win-x64/Slime.exe`를 더블 클릭하세요. 설치나 관리자 권한이 필요하지 않습니다. 실행 파일에 .NET 런타임이 포함됩니다. Windows 10/11 x64용입니다.
+
+- **왼쪽 클릭 5번:** 슬라임이 납작한 웅덩이로 녹아 사라집니다. 클릭 횟수는 몸 아래 작은 점으로 표시됩니다.
+- **완전히 사라진 뒤 10초:** 화면 안의 새로운 위치에 다시 나타납니다. 클릭 횟수는 초기화됩니다.
+- **오른쪽 클릭 → 슬라임 종료:** 프로그램을 종료합니다. 슬라임이 사라져 있는 동안에는 작업 표시줄 알림 영역의 초록색 슬라임 아이콘을 오른쪽 클릭해서 종료하세요.
+
+슬라임은 다른 창 위에도 보이며 키보드 포커스를 빼앗지 않습니다. 투명한 부분은 마우스 클릭을 통과시킵니다. 작업 표시줄을 피해서 이동하며, 모니터 연결 구성이 바뀌면 보이는 화면으로 위치를 옮깁니다. 중복 실행은 방지됩니다.
+
+## 소스에서 빌드
+
+[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)를 설치한 Windows에서 `build-windows.bat`를 더블 클릭하세요. 테스트 후 `dist/win-x64/Slime.exe`를 만듭니다.
+
+명령줄에서는 다음과 같이 빌드할 수 있습니다.
+
+```powershell
+dotnet run --project tests/Slime.Core.Tests -c Release
+dotnet publish src/Slime.Desktop/Slime.Desktop.csproj -c Release -r win-x64 --self-contained true -o dist/win-x64
+```
+
+Windows ARM64용으로 빌드하려면 `-r win-arm64 -o dist/win-arm64`를 사용하세요. macOS에서도 Windows 대상으로 컴파일할 수 있지만 실행은 Windows에서 해야 합니다.
+
+## 구현
+
+- `src/Slime.Core`: 클릭 횟수, 녹기/재생성 시간, 이동 범위. UI와 분리하여 테스트합니다.
+- `src/Slime.Desktop`: Windows Forms 및 픽셀별 투명도를 지원하는 Windows 레이어 창. 슬라임 그림을 직접 그리므로 별도 이미지 파일이 필요 없습니다.
+- `tests/Slime.Core.Tests`: 다섯 번째 클릭, 사라진 후 10초 대기, 반복 재생성, 화면 경계와 모니터 변경을 검사합니다.
+
+애니메이션은 초당 약 30프레임이며 숨겨진 동안에는 그리기를 멈춥니다. 시간은 실제 경과 시간으로 계산합니다. 배포 방식은 Microsoft의 [단일 실행 파일 배포 문서](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview)를 따릅니다.
