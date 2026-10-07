@@ -110,20 +110,44 @@ dragged.Update(SlimeModel.RespawnDelay, multi);
 Check(dragged.ClickCount == 0 && pointer.Press(dragged.X + 80, dragged.Y + 150),
     "A respawned slime can be grabbed again");
 pointer.Cancel();
-Check(dragged.AngerLevel == 1, "Respawn begins fully angry and red");
-dragged.Update(1.0, multi);
-Check(dragged.AngerLevel == 1, "Anger stays fully visible during the initial respawn");
-dragged.Update(1.5, multi);
-Check(dragged.AngerLevel > 0 && dragged.AngerLevel < 1, "Anger fades gradually toward the normal appearance");
-var previousAnger = dragged.AngerLevel;
-pointer.Press(dragged.X + 80, dragged.Y + 150);
-dragged.Update(0.5, multi);
-Check(dragged.AngerLevel < previousAnger, "Dragging does not freeze the calming animation");
-pointer.Cancel();
-dragged.Update(1.0, multi);
-Check(dragged.AngerLevel == 0, "Anger ends exactly four seconds after reappearance");
-for (var i = 0; i < SlimeModel.RequiredClicks; i++) dragged.Click();
-dragged.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + 10, multi);
-Check(dragged.State == SlimeState.Active && dragged.AngerLevel == 0,
-    "Large elapsed updates preserve the full anger and calm lifecycle");
+var evolving = new SlimeModel(screens, 19);
+evolving.Update(SlimeModel.SpawnDuration, screens);
+var initialSpeed = evolving.MovementSpeed;
+Check(evolving.Mood == SlimeMood.Green && evolving.SizeMultiplier == 1 && evolving.AngerLevel == 0,
+    "Initial slime is full-size, green and happy");
+var moods = new[] { SlimeMood.Yellow, SlimeMood.Orange, SlimeMood.Red };
+var expectedSizes = new[] { 0.9, 0.81, 0.729 };
+var expectedSpeeds = new[] { 1.2, 1.44, 1.728 };
+for (var stage = 0; stage < 3; stage++)
+{
+    var oldSize = evolving.SizeMultiplier;
+    var oldSpeed = evolving.MovementSpeed;
+    var oldAnger = evolving.AngerLevel;
+    for (var click = 0; click < SlimeModel.RequiredClicks; click++) evolving.Click();
+    evolving.Update(SlimeModel.MeltDuration, screens);
+    Check(evolving.Generation == stage, "Generation stays unchanged while hidden");
+    evolving.Update(SlimeModel.RespawnDelay, screens);
+    Check(evolving.Mood == moods[stage] && evolving.ClickCount == 0,
+        $"Respawn {stage + 1} has the expected color and a reset click count");
+    Check(Math.Abs(evolving.SizeMultiplier - expectedSizes[stage]) < 1e-10 &&
+          Math.Abs(evolving.SizeMultiplier / oldSize - 0.9) < 1e-10,
+        $"Respawn {stage + 1} shrinks exactly ten percent from the previous size");
+    Check(Math.Abs(evolving.MovementSpeed / initialSpeed - expectedSpeeds[stage]) < 1e-10 &&
+          Math.Abs(evolving.MovementSpeed / oldSpeed - 1.2) < 1e-10,
+        $"Respawn {stage + 1} increases actual movement speed by twenty percent");
+    Check(evolving.AngerLevel > oldAnger, $"Respawn {stage + 1} is angrier than the previous stage");
+    evolving.Update(30, screens);
+    Check(evolving.Mood == moods[stage] && evolving.AngerLevel > 0,
+        $"Stage {stage + 1} stays in its new mood instead of calming back to green");
+    for (var tick = 0; tick < 200; tick++) evolving.Update(0.05, screens);
+    Check(Math.Abs(evolving.MovementSpeed / initialSpeed - expectedSpeeds[stage]) < 1e-10,
+        $"Stage {stage + 1} keeps its speed when changing direction or bouncing");
+}
+for (var click = 0; click < SlimeModel.RequiredClicks; click++) evolving.Click();
+evolving.Update(SlimeModel.MeltDuration + SlimeModel.RespawnDelay + SlimeModel.SpawnDuration + 0.1, screens);
+Check(evolving.Generation == 3 && evolving.Mood == SlimeMood.Red && evolving.AngerLevel == 1 &&
+      Math.Abs(evolving.SizeMultiplier - 0.729) < 1e-10 && Math.Abs(evolving.SpeedMultiplier - 1.728) < 1e-10,
+    "Further respawns retain the final red stage without shrinking indefinitely");
+var fresh = new SlimeModel(screens, 19);
+Check(fresh.Generation == 0 && fresh.Mood == SlimeMood.Green, "Restarting begins again at the happy green stage");
 Console.WriteLine($"\nAll {passed} checks passed.");

@@ -1,6 +1,7 @@
 namespace Slime.Core;
 
 public enum SlimeState { Spawning, Active, Melting, Hidden }
+public enum SlimeMood { Green, Yellow, Orange, Red }
 
 public readonly record struct DesktopArea(double Left, double Top, double Width, double Height);
 public readonly record struct ReactionPose(double Width, double Height, double Lift, double Tilt);
@@ -15,10 +16,10 @@ public sealed class SlimeModel
     public const double RespawnDelay = 10;
     public const double SpawnDuration = 0.65;
     public const double ReactionDuration = 0.75;
-    public const double AngryDuration = 4;
-    public const double CalmDuration = 2.5;
+    public const int FinalGeneration = 3;
 
     private readonly Random random;
+    private readonly double baseSpeed;
     private DesktopArea area;
     private double directionTime;
     private double velocityX;
@@ -27,6 +28,7 @@ public sealed class SlimeModel
     public SlimeModel(IReadOnlyList<DesktopArea> screens, int? seed = null)
     {
         random = seed is int value ? new Random(value) : new Random();
+        baseSpeed = 20 + random.NextDouble() * 18;
         Place(screens);
     }
 
@@ -38,8 +40,12 @@ public sealed class SlimeModel
     public double StateTime { get; private set; }
     public double HitAge { get; private set; } = 100;
     public bool IsHeld { get; private set; }
-    public double AngerRemaining { get; private set; }
-    public double AngerLevel => Math.Clamp(AngerRemaining / CalmDuration, 0, 1);
+    public int Generation { get; private set; }
+    public SlimeMood Mood => (SlimeMood)Generation;
+    public double SizeMultiplier => Math.Pow(0.9, Generation);
+    public double SpeedMultiplier => Math.Pow(1.2, Generation);
+    public double AngerLevel => Generation / (double)FinalGeneration;
+    public double MovementSpeed => Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
     public ReactionPose Reaction
     {
         get
@@ -130,8 +136,6 @@ public sealed class SlimeModel
                 _ => double.PositiveInfinity
             };
             var step = Math.Min(remaining, duration - StateTime);
-            if (State is SlimeState.Spawning or SlimeState.Active)
-                AngerRemaining = Math.Max(0, AngerRemaining - step);
             if (State == SlimeState.Active && !IsHeld && HitAge >= ReactionDuration) Move(Math.Min(step, 0.1));
             StateTime += step;
             remaining -= step;
@@ -144,7 +148,7 @@ public sealed class SlimeModel
                 case SlimeState.Hidden:
                     ClickCount = 0;
                     HitAge = 100;
-                    AngerRemaining = AngryDuration;
+                    Generation = Math.Min(FinalGeneration, Generation + 1);
                     Place(screens);
                     State = SlimeState.Spawning;
                     break;
@@ -164,9 +168,12 @@ public sealed class SlimeModel
     private void ChooseDirection()
     {
         var angle = random.NextDouble() * Math.PI * 2;
-        var speed = 20 + random.NextDouble() * 18;
-        velocityX = Math.Cos(angle) * speed;
-        velocityY = Math.Sin(angle) * speed * 0.55;
+        var speed = baseSpeed * SpeedMultiplier;
+        var dx = Math.Cos(angle);
+        var dy = Math.Sin(angle) * 0.55;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        velocityX = dx / length * speed;
+        velocityY = dy / length * speed;
         directionTime = 2 + random.NextDouble() * 4;
     }
 

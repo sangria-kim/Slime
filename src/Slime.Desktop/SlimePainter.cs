@@ -35,14 +35,21 @@ internal static class SlimePainter
             ? 1 - Smooth(Math.Clamp(model.StateTime / 0.35, 0, 1)) : 1;
         width *= 1 + (reaction.Width - 1) * reactionStrength;
         height *= 1 + (reaction.Height - 1) * reactionStrength;
-        var lift = reaction.Lift * reactionStrength;
+        width *= model.SizeMultiplier;
+        height *= model.SizeMultiplier;
+        var lift = reaction.Lift * reactionStrength * model.SizeMultiplier;
 
         Color Tint(int red, int green, int blue, double alpha = 1) =>
             Color.FromArgb((int)Math.Clamp(255 * alpha * opacity, 0, 255), red, green, blue);
-        var anger = Smooth(model.AngerLevel);
+        var anger = model.AngerLevel;
         Color BodyTint(int red, int green, int blue, int angryRed, int angryGreen, int angryBlue, double alpha = 1) =>
-            Tint((int)(red + (angryRed - red) * anger), (int)(green + (angryGreen - green) * anger),
-                (int)(blue + (angryBlue - blue) * anger), alpha);
+            model.Mood switch
+            {
+                SlimeMood.Yellow => Tint(Math.Min(255, red + 85), Math.Min(245, green), blue, alpha),
+                SlimeMood.Orange => Tint(Math.Min(255, angryRed + 18), (green + angryGreen) / 2, blue / 2, alpha),
+                SlimeMood.Red => Tint(angryRed, angryGreen, angryBlue, alpha),
+                _ => Tint(red, green, blue, alpha)
+            };
 
         for (var i = 4; i >= 0; i--)
         {
@@ -141,9 +148,14 @@ internal static class SlimePainter
             using var tongue = new SolidBrush(Tint(250, 156, 170));
             graphics.FillEllipse(tongue, 5 + look, -26, 6, 4);
         }
-        else if (anger > 0.15)
+        else if (anger > 0)
         {
-            graphics.DrawArc(facePen, 2 + look, -28, 12, 8, 180, 180);
+            graphics.DrawArc(facePen, 2 + look, -28, 12, 3 + (float)anger * 7, 180, 180);
+            if (model.Mood == SlimeMood.Red)
+            {
+                graphics.DrawLine(facePen, 3 + look, -24, 7 + look, -21);
+                graphics.DrawLine(facePen, 7 + look, -21, 12 + look, -24);
+            }
         }
         else
         {
@@ -152,10 +164,17 @@ internal static class SlimePainter
         }
         if (anger > 0 && model.HitAge >= 0.44)
         {
-            using var brows = new Pen(Tint(70, 26, 20, anger), 2.5f)
+            using var brows = new Pen(Tint(70, 26, 20, 0.45 + anger * 0.55), 1.5f + (float)anger * 1.5f)
                 { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            graphics.DrawLine(brows, -22 + look, -53, -5 + look, -46);
-            graphics.DrawLine(brows, 18 + look, -50, 33 + look, -58);
+            graphics.DrawLine(brows, -22 + look, -49 - (float)anger * 4, -5 + look, -49 + (float)anger * 3);
+            graphics.DrawLine(brows, 18 + look, -53 + (float)anger * 3, 33 + look, -53 - (float)anger * 5);
+            if (model.Mood == SlimeMood.Red)
+            {
+                using var fury = new Pen(Tint(117, 28, 22), 2.2f)
+                    { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                graphics.DrawLines(fury, [new PointF(20, -70), new PointF(25, -67), new PointF(28, -72)]);
+                graphics.DrawLines(fury, [new PointF(30, -66), new PointF(26, -63), new PointF(29, -59)]);
+            }
         }
         graphics.Restore(saved);
 
@@ -164,12 +183,12 @@ internal static class SlimePainter
             var effectAlpha = 1 - Smooth(Math.Clamp((model.HitAge - 0.55) / 0.35, 0, 1));
             using var burst = new Pen(Tint(255, 220, 109, effectAlpha), 2.5f)
                 { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            var radius = 58 + Math.Min(model.HitAge / 0.5, 1) * 15;
+            var radius = (58 + Math.Min(model.HitAge / 0.5, 1) * 15) * model.SizeMultiplier;
             for (var i = 0; i < 7; i++)
             {
                 var angle = (i + 0.5) * Math.PI * 2 / 7;
                 var cx = 98.0;
-                var cy = 136 - lift;
+                var cy = 181 - 45 * model.SizeMultiplier - lift;
                 graphics.DrawLine(burst,
                     (float)(cx + Math.Cos(angle) * radius), (float)(cy + Math.Sin(angle) * radius * 0.6),
                     (float)(cx + Math.Cos(angle) * (radius + 8)), (float)(cy + Math.Sin(angle) * (radius + 8) * 0.6));
@@ -198,9 +217,9 @@ internal static class SlimePainter
             {
                 var side = i < 2 ? -1 : 1;
                 var travel = model.Progress;
-                var x = 98 + side * (40 + travel * (24 + i * 3));
-                var y = 175 - Math.Sin(travel * Math.PI) * (12 + i * 3);
-                var size = (1 - travel) * 6;
+                var x = 98 + side * (40 + travel * (24 + i * 3)) * model.SizeMultiplier;
+                var y = 175 - Math.Sin(travel * Math.PI) * (12 + i * 3) * model.SizeMultiplier;
+                var size = (1 - travel) * 6 * model.SizeMultiplier;
                 graphics.FillEllipse(droplet, (float)x, (float)y, (float)size, (float)(size * 0.7));
             }
         }
